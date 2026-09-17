@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mensajero · Demo Netlify DB</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --panel-2: #1f232c;
+    --border: #2a2f3a;
+    --text: #e6e8eb;
+    --muted: #9aa1ac;
+    --accent: #5b8cff;
+    --accent-2: #3ecf8e;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+  .app {
+    width: 100%;
+    max-width: 720px;
+  }
+  h1 {
+    font-size: 1.4rem;
+    margin: 0 0 4px;
+  }
+  .subtitle {
+    color: var(--muted);
+    font-size: 0.9rem;
+    margin-bottom: 20px;
+  }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+  label {
+    display: block;
+    font-size: 0.8rem;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+  input, textarea {
+    width: 100%;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    color: var(--text);
+    font-size: 0.95rem;
+    font-family: inherit;
+  }
+  input:focus, textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+  textarea { resize: vertical; min-height: 60px; }
+  .row { display: flex; gap: 12px; }
+  .row > div { flex: 1; }
+  .field { margin-bottom: 14px; }
+  button {
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 18px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  button:hover { opacity: 0.9; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  button.secondary {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text);
+  }
+  .user-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    justify-content: space-between;
+  }
+  .user-bar .who {
+    font-size: 0.95rem;
+  }
+  .user-bar .who b { color: var(--accent-2); }
+  .msg-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-height: 340px;
+    overflow-y: auto;
+  }
+  .msg {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+  }
+  .msg .meta {
+    font-size: 0.75rem;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+  .msg .meta b { color: var(--accent); }
+  .msg .body { font-size: 0.92rem; white-space: pre-wrap; word-break: break-word; }
+  .empty { color: var(--muted); font-size: 0.9rem; text-align: center; padding: 20px 0; }
+  .status { font-size: 0.75rem; color: var(--muted); margin-top: 8px; text-align: right; }
+  .send-status { font-size: 0.8rem; margin-top: 8px; min-height: 1em; }
+  .send-status.ok { color: var(--accent-2); }
+  .send-status.error { color: #ff6b6b; }
+  .panel-title { font-size: 1rem; margin: 0 0 14px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <h1>💬 Mensajero</h1>
+  <p class="subtitle">Demo de uso de la base de datos de Netlify (Netlify DB / Postgres)</p>
+
+  <!-- Paso 1: elegir nombre de usuario -->
+  <div class="card" id="tarjeta-login">
+    <p class="panel-title">¿Cómo te llamas?</p>
+    <div class="field">
+      <label for="input-nombre">Tu nombre de usuario</label>
+      <input id="input-nombre" type="text" maxlength="40" placeholder="p. ej. manuel" autocomplete="off">
+    </div>
+    <button id="btn-entrar">Entrar</button>
+  </div>
+
+  <!-- Paso 2: mensajero (oculto hasta elegir nombre) -->
+  <div id="zona-app" style="display:none">
+    <div class="card user-bar">
+      <div class="who">Conectado como <b id="etiqueta-usuario"></b></div>
+      <button class="secondary" id="btn-salir">Cambiar de usuario</button>
+    </div>
+
+    <div class="card">
+      <p class="panel-title">Enviar mensaje</p>
+      <div class="field">
+        <label for="input-destinatario">Para (nombre de usuario)</label>
+        <input id="input-destinatario" type="text" maxlength="40" placeholder="p. ej. laura" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="input-mensaje">Mensaje</label>
+        <textarea id="input-mensaje" maxlength="1000" placeholder="Escribe tu mensaje..."></textarea>
+      </div>
+      <button id="btn-enviar">Enviar</button>
+      <div class="send-status" id="estado-envio"></div>
+    </div>
+
+    <div class="card">
+      <p class="panel-title">Mensajes recibidos</p>
+      <div class="msg-list" id="lista-mensajes">
+        <div class="empty">Aún no hay mensajes.</div>
+      </div>
+      <div class="status" id="estado-consulta">Consultando cada 5 segundos…</div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  const INTERVALO_MS = 5000; // consulta cada 5 segundos, como se pidió
+  const CLAVE_USUARIO = 'mensajero_usuario';
+
+  const tarjetaLogin = document.getElementById('tarjeta-login');
+  const zonaApp = document.getElementById('zona-app');
+  const inputNombre = document.getElementById('input-nombre');
+  const btnEntrar = document.getElementById('btn-entrar');
+  const etiquetaUsuario = document.getElementById('etiqueta-usuario');
+  const btnSalir = document.getElementById('btn-salir');
+
+  const inputDestinatario = document.getElementById('input-destinatario');
+  const inputMensaje = document.getElementById('input-mensaje');
+  const btnEnviar = document.getElementById('btn-enviar');
+  const estadoEnvio = document.getElementById('estado-envio');
+
+  const listaMensajes = document.getElementById('lista-mensajes');
+  const estadoConsulta = document.getElementById('estado-consulta');
+
+  let usuarioActual = null;
+  let temporizador = null;
+  let ultimoIdVisto = 0;
+
+  function entrarComo(nombre) {
+    usuarioActual = nombre;
+    localStorage.setItem(CLAVE_USUARIO, nombre);
+    etiquetaUsuario.textContent = nombre;
+    tarjetaLogin.style.display = 'none';
+    zonaApp.style.display = 'block';
+    ultimoIdVisto = 0;
+    listaMensajes.innerHTML = '<div class="empty">Aún no hay mensajes.</div>';
+    consultarMensajes();
+    if (temporizador) clearInterval(temporizador);
+    temporizador = setInterval(consultarMensajes, INTERVALO_MS);
+  }
+
+  function salir() {
+    usuarioActual = null;
+    localStorage.removeItem(CLAVE_USUARIO);
+    if (temporizador) clearInterval(temporizador);
+    zonaApp.style.display = 'none';
+    tarjetaLogin.style.display = 'block';
+    inputNombre.value = '';
+    inputNombre.focus();
+  }
+
+  function escaparHtml(texto) {
+    const div = document.createElement('div');
+    div.textContent = texto;
+    return div.innerHTML;
+  }
+
+  function formatearFecha(iso) {
+    try {
+      const d = new Date(iso);
+      return d.toLocaleString();
+    } catch {
+      return iso;
+    }
+  }
+
+  async function consultarMensajes() {
+    if (!usuarioActual) return;
+    estadoConsulta.textContent = 'Consultando…';
+    try {
+      const resp = await fetch('/api/mensajes?usuario=' + encodeURIComponent(usuarioActual));
+      if (!resp.ok) throw new Error('Error del servidor');
+      const mensajes = await resp.json();
+
+      if (!Array.isArray(mensajes) || mensajes.length === 0) {
+        listaMensajes.innerHTML = '<div class="empty">Aún no hay mensajes.</div>';
+      } else {
+        listaMensajes.innerHTML = mensajes.map(m => `
+          <div class="msg">
+            <div class="meta"><b>${escaparHtml(m.remitente)}</b> · ${formatearFecha(m.creado_en)}</div>
+            <div class="body">${escaparHtml(m.cuerpo)}</div>
+          </div>
+        `).join('');
+        listaMensajes.scrollTop = listaMensajes.scrollHeight;
+      }
+      const ahora = new Date().toLocaleTimeString();
+      estadoConsulta.textContent = `Última consulta: ${ahora} · próxima en 5s`;
+    } catch (err) {
+      estadoConsulta.textContent = 'Error al consultar mensajes. Reintentando en 5s…';
+      console.error(err);
+    }
+  }
+
+  async function enviarMensaje() {
+    const para = inputDestinatario.value.trim();
+    const mensaje = inputMensaje.value.trim();
+
+    if (!para || !mensaje) {
+      estadoEnvio.textContent = 'Rellena el destinatario y el mensaje.';
+      estadoEnvio.className = 'send-status error';
+      return;
+    }
+
+    btnEnviar.disabled = true;
+    estadoEnvio.textContent = 'Enviando…';
+    estadoEnvio.className = 'send-status';
+
+    try {
+      const resp = await fetch('/api/enviar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ de: usuarioActual, para, mensaje }),
+      });
+      const datos = await resp.json();
+      if (!resp.ok) throw new Error(datos.error || 'Error al enviar');
+
+      estadoEnvio.textContent = '✓ Mensaje enviado.';
+      estadoEnvio.className = 'send-status ok';
+      inputMensaje.value = '';
+    } catch (err) {
+      estadoEnvio.textContent = '✗ ' + err.message;
+      estadoEnvio.className = 'send-status error';
+    } finally {
+      btnEnviar.disabled = false;
+    }
+  }
+
+  btnEntrar.addEventListener('click', () => {
+    const nombre = inputNombre.value.trim();
+    if (!nombre) {
+      inputNombre.focus();
+      return;
+    }
+    entrarComo(nombre);
+  });
+
+  inputNombre.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') btnEntrar.click();
+  });
+
+  btnSalir.addEventListener('click', salir);
+  btnEnviar.addEventListener('click', enviarMensaje);
+
+  // Recordar el último usuario usado
+  const guardado = localStorage.getItem(CLAVE_USUARIO);
+  if (guardado) {
+    inputNombre.value = guardado;
+    entrarComo(guardado);
+  }
+})();
+</script>
+</body>
+</html>

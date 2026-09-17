@@ -1,0 +1,56 @@
+import { neon } from '@netlify/neon';
+
+const sql = neon();
+
+async function asegurarTabla() {
+  await sql`
+    CREATE TABLE IF NOT EXISTS mensajes (
+      id SERIAL PRIMARY KEY,
+      remitente TEXT NOT NULL,
+      destinatario TEXT NOT NULL,
+      cuerpo TEXT NOT NULL,
+      creado_en TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `;
+}
+
+export default async (req) => {
+  if (req.method !== 'GET') {
+    return new Response(JSON.stringify({ error: 'Método no permitido' }), {
+      status: 405,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  const url = new URL(req.url);
+  const usuario = (url.searchParams.get('usuario') || '').trim().slice(0, 40);
+
+  if (!usuario) {
+    return new Response(JSON.stringify({ error: 'Falta el parámetro "usuario"' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  try {
+    await asegurarTabla();
+    // Solo se devuelven los mensajes dirigidos a este usuario, con el remitente.
+    const filas = await sql`
+      SELECT id, remitente, cuerpo, creado_en
+      FROM mensajes
+      WHERE destinatario = ${usuario}
+      ORDER BY creado_en ASC
+    `;
+
+    return new Response(JSON.stringify(filas), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  } catch (err) {
+    console.error('Error al consultar mensajes:', err);
+    return new Response(JSON.stringify({ error: 'Error interno al consultar mensajes' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+};

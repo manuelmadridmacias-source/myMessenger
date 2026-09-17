@@ -1,0 +1,14 @@
+[build]
+  publish = "public"
+  functions = "netlify/functions"
+
+# Rutas cómodas para el frontend: /api/enviar y /api/mensajes
+[[redirects]]
+  from = "/api/enviar"
+  to = "/.netlify/functions/enviar-mensaje"
+  status = 200
+
+[[redirects]]
+  from = "/api/mensajes"
+  to = "/.netlify/functions/obtener-mensajes"
+  status = 200

@@ -1,0 +1,9 @@
+{
+  "name": "mensajero-netlify-demo",
+  "version": "1.0.0",
+  "description": "Demo de mensajero web usando Netlify DB (Postgres/Neon) y Netlify Functions",
+  "type": "module",
+  "dependencies": {
+    "@netlify/neon": "^0.1.2"
+  }
+}
