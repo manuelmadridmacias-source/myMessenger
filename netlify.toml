@@ -12,3 +12,8 @@
   from = "/api/mensajes"
   to = "/.netlify/functions/obtener-mensajes"
   status = 200
+
+[[redirects]]
+  from = "/api/estado"
+  to = "/.netlify/functions/estado-db"
+  status = 200

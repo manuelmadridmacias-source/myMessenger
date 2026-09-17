@@ -17,8 +17,37 @@ mensajero-netlify/
 │   └── index.html                        # frontend (vanilla JS)
 └── netlify/functions/
     ├── enviar-mensaje.mjs                # POST /api/enviar
-    └── obtener-mensajes.mjs              # GET  /api/mensajes?usuario=...
+    ├── obtener-mensajes.mjs              # GET  /api/mensajes?usuario=...
+    └── estado-db.mjs                     # GET  /api/estado (comprobación de conexión)
 ```
+
+## Diagnóstico: "me da fallo en la consulta y el envío de mensajes"
+
+La página ahora comprueba la conexión a la base de datos **nada más
+cargar**, con una llamada a `/api/estado`, y muestra un aviso arriba del
+todo: verde si todo va bien (se oculta solo a los 3 segundos), o rojo con el
+motivo exacto del fallo si algo no funciona. Ese mismo aviso se reactiva si
+falla un envío o una consulta mientras usas la app.
+
+Los motivos más comunes de fallo son:
+
+- **La base de datos no se llegó a provisionar** (falta la variable
+  `NETLIFY_DATABASE_URL`). Comprueba en *Site configuration → Environment
+  variables* si existe. Si no está, vuelve a desplegar el sitio (un nuevo
+  build vuelve a intentar la detección de `@netlify/neon`) o créala a mano
+  siguiendo la guía de Netlify DB.
+- **El sitio se desplegó por "drag & drop"** en vez de conectarlo a un
+  repositorio Git: ese método no ejecuta `npm install` ni el build, así que
+  nunca se provisiona la base de datos ni se instalan las dependencias de las
+  funciones. Tienes que desplegarlo conectando un repositorio, como se explica
+  más abajo.
+- **Las funciones no encuentran el paquete `@netlify/neon`** porque el
+  `package.json` no llegó a subirse junto con el resto del proyecto, o el
+  build no llegó a completarse. Revisa el log del deploy en Netlify.
+
+Con el aviso de estado y el campo `detalle` que ahora devuelven las
+funciones en caso de error, deberías ver el mensaje exacto de Postgres/Neon
+en pantalla en vez de un fallo genérico.
 
 La tabla `mensajes` se crea automáticamente (`CREATE TABLE IF NOT EXISTS`) la
 primera vez que se llama a cualquiera de las dos funciones, así que no hace

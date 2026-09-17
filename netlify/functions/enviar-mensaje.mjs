@@ -59,9 +59,9 @@ export default async (req) => {
     });
   } catch (err) {
     console.error('Error al guardar mensaje:', err);
-    return new Response(JSON.stringify({ error: 'Error interno al guardar el mensaje' }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return new Response(
+      JSON.stringify({ error: 'Error interno al guardar el mensaje', detalle: err.message }),
+      { status: 500, headers: { 'Content-Type': 'application/json' } }
+    );
   }
 };

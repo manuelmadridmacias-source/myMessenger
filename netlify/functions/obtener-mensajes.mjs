@@ -48,9 +48,9 @@ export default async (req) => {
     });
   } catch (err) {
     console.error('Error al consultar mensajes:', err);
-    return new Response(JSON.stringify({ error: 'Error interno al consultar mensajes' }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return new Response(
+      JSON.stringify({ error: 'Error interno al consultar mensajes', detalle: err.message }),
+      { status: 500, headers: { 'Content-Type': 'application/json' } }
+    );
   }
 };

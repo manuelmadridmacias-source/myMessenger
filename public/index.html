@@ -124,12 +124,34 @@
   .send-status.ok { color: var(--accent-2); }
   .send-status.error { color: #ff6b6b; }
   .panel-title { font-size: 1rem; margin: 0 0 14px; }
+  .db-banner {
+    border-radius: 10px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+    font-size: 0.88rem;
+    border: 1px solid var(--border);
+  }
+  .db-banner.ok {
+    background: rgba(62, 207, 142, 0.12);
+    border-color: rgba(62, 207, 142, 0.4);
+    color: var(--accent-2);
+  }
+  .db-banner.error {
+    background: rgba(255, 107, 107, 0.1);
+    border-color: rgba(255, 107, 107, 0.4);
+    color: #ff8a8a;
+  }
+  .db-banner.checking {
+    color: var(--muted);
+  }
 </style>
 </head>
 <body>
 <div class="app">
   <h1>💬 Mensajero</h1>
   <p class="subtitle">Demo de uso de la base de datos de Netlify (Netlify DB / Postgres)</p>
+
+  <div id="aviso-db" class="db-banner" style="display:none"></div>
 
   <!-- Paso 1: elegir nombre de usuario -->
   <div class="card" id="tarjeta-login">
@@ -191,9 +213,32 @@
 
   const listaMensajes = document.getElementById('lista-mensajes');
   const estadoConsulta = document.getElementById('estado-consulta');
+  const avisoDb = document.getElementById('aviso-db');
 
   let usuarioActual = null;
   let temporizador = null;
+
+  async function comprobarBaseDeDatos() {
+    avisoDb.style.display = 'block';
+    avisoDb.className = 'db-banner checking';
+    avisoDb.textContent = 'Comprobando conexión con la base de datos…';
+    try {
+      const resp = await fetch('/api/estado');
+      const datos = await resp.json();
+      if (resp.ok && datos.ok) {
+        avisoDb.className = 'db-banner ok';
+        avisoDb.textContent = '✓ Conexión con la base de datos correcta.';
+        // Ocultar el aviso a los 3 segundos si todo va bien
+        setTimeout(() => { avisoDb.style.display = 'none'; }, 3000);
+      } else {
+        avisoDb.className = 'db-banner error';
+        avisoDb.textContent = '✗ Fallo de conexión con la base de datos: ' + (datos.error || 'error desconocido');
+      }
+    } catch (err) {
+      avisoDb.className = 'db-banner error';
+      avisoDb.textContent = '✗ No se pudo contactar con la función de estado (/api/estado). ' + err.message;
+    }
+  }
   let ultimoIdVisto = 0;
 
   function entrarComo(nombre) {
@@ -239,8 +284,8 @@
     estadoConsulta.textContent = 'Consultando…';
     try {
       const resp = await fetch('/api/mensajes?usuario=' + encodeURIComponent(usuarioActual));
-      if (!resp.ok) throw new Error('Error del servidor');
       const mensajes = await resp.json();
+      if (!resp.ok) throw new Error(mensajes.detalle || mensajes.error || 'Error del servidor');
 
       if (!Array.isArray(mensajes) || mensajes.length === 0) {
         listaMensajes.innerHTML = '<div class="empty">Aún no hay mensajes.</div>';
@@ -258,6 +303,7 @@
     } catch (err) {
       estadoConsulta.textContent = 'Error al consultar mensajes. Reintentando en 5s…';
       console.error(err);
+      comprobarBaseDeDatos();
     }
   }
 
@@ -282,7 +328,7 @@
         body: JSON.stringify({ de: usuarioActual, para, mensaje }),
       });
       const datos = await resp.json();
-      if (!resp.ok) throw new Error(datos.error || 'Error al enviar');
+      if (!resp.ok) throw new Error(datos.detalle || datos.error || 'Error al enviar');
 
       estadoEnvio.textContent = '✓ Mensaje enviado.';
       estadoEnvio.className = 'send-status ok';
@@ -290,6 +336,7 @@
     } catch (err) {
       estadoEnvio.textContent = '✗ ' + err.message;
       estadoEnvio.className = 'send-status error';
+      comprobarBaseDeDatos();
     } finally {
       btnEnviar.disabled = false;
     }
@@ -310,6 +357,9 @@
 
   btnSalir.addEventListener('click', salir);
   btnEnviar.addEventListener('click', enviarMensaje);
+
+  // Comprobar el estado de la base de datos nada más cargar la página
+  comprobarBaseDeDatos();
 
   // Recordar el último usuario usado
   const guardado = localStorage.getItem(CLAVE_USUARIO);
