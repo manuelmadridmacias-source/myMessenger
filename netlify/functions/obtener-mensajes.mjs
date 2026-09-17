@@ -1,18 +1,7 @@
-import { neon } from '@netlify/neon';
+import { getConnectionString } from '@netlify/database';
+import pg from 'pg';
 
-const sql = neon();
-
-async function asegurarTabla() {
-  await sql`
-    CREATE TABLE IF NOT EXISTS mensajes (
-      id SERIAL PRIMARY KEY,
-      remitente TEXT NOT NULL,
-      destinatario TEXT NOT NULL,
-      cuerpo TEXT NOT NULL,
-      creado_en TIMESTAMPTZ NOT NULL DEFAULT now()
-    )
-  `;
-}
+const pool = new pg.Pool({ connectionString: getConnectionString() });
 
 export default async (req) => {
   if (req.method !== 'GET') {
@@ -33,16 +22,13 @@ export default async (req) => {
   }
 
   try {
-    await asegurarTabla();
     // Solo se devuelven los mensajes dirigidos a este usuario, con el remitente.
-    const filas = await sql`
-      SELECT id, remitente, cuerpo, creado_en
-      FROM mensajes
-      WHERE destinatario = ${usuario}
-      ORDER BY creado_en ASC
-    `;
+    const { rows } = await pool.query(
+      'SELECT id, remitente, cuerpo, creado_en FROM mensajes WHERE destinatario = $1 ORDER BY creado_en ASC',
+      [usuario]
+    );
 
-    return new Response(JSON.stringify(filas), {
+    return new Response(JSON.stringify(rows), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
     });

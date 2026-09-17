@@ -1,69 +1,60 @@
-# Mensajero — Demo de Netlify DB
+# Mensajero — Demo de Netlify Database
 
 Demo mínima de un mensajero web: cada usuario elige un nombre libremente, envía
 mensajes a cualquier otro nombre, y solo ve los mensajes dirigidos a él (con el
-nombre de quien los envió). Todo se guarda en **Netlify DB** (Postgres, con
-Neon por debajo), y el frontend consulta los mensajes recibidos **cada 5
-segundos** (polling) en lugar de hacerlo en tiempo real, para no saturar la
-base de datos.
+nombre de quien los envió). Todo se guarda en **Netlify Database** (Postgres),
+y el frontend consulta los mensajes recibidos **cada 5 segundos** (polling) en
+lugar de hacerlo en tiempo real, para no saturar la base de datos.
 
 ## Estructura
 
 ```
 mensajero-netlify/
-├── netlify.toml                          # config de Netlify + rutas /api/*
-├── package.json                          # dependencia @netlify/neon
+├── netlify.toml                            # config de Netlify + rutas /api/*
+├── package.json                            # dependencias @netlify/database y pg
 ├── public/
-│   └── index.html                        # frontend (vanilla JS)
-└── netlify/functions/
-    ├── enviar-mensaje.mjs                # POST /api/enviar
-    ├── obtener-mensajes.mjs              # GET  /api/mensajes?usuario=...
-    └── estado-db.mjs                     # GET  /api/estado (comprobación de conexión)
+│   └── index.html                          # frontend (vanilla JS)
+├── netlify/functions/
+│   ├── enviar-mensaje.mjs                  # POST /api/enviar
+│   ├── obtener-mensajes.mjs                # GET  /api/mensajes?usuario=...
+│   └── estado-db.mjs                       # GET  /api/estado (comprobación de conexión)
+└── netlify/database/migrations/
+    └── 20260101000000_create_mensajes/
+        └── migration.sql                   # crea la tabla "mensajes"
 ```
 
-## Diagnóstico: "me da fallo en la consulta y el envío de mensajes"
+## Cómo provisionar la base de datos en el sitio
 
-La página ahora comprueba la conexión a la base de datos **nada más
-cargar**, con una llamada a `/api/estado`, y muestra un aviso arriba del
-todo: verde si todo va bien (se oculta solo a los 3 segundos), o rojo con el
-motivo exacto del fallo si algo no funciona. Ese mismo aviso se reactiva si
-falla un envío o una consulta mientras usas la app.
+Tienes dos formas, ambas 100% desde el navegador (nada de terminal):
 
-Los motivos más comunes de fallo son:
+### Opción A — Manualmente desde el panel (recomendada si ya tienes el sitio creado)
 
-- **La base de datos no se llegó a provisionar** (falta la variable
-  `NETLIFY_DATABASE_URL`). Comprueba en *Site configuration → Environment
-  variables* si existe. Si no está, vuelve a desplegar el sitio (un nuevo
-  build vuelve a intentar la detección de `@netlify/neon`) o créala a mano
-  siguiendo la guía de Netlify DB.
-- **El sitio se desplegó por "drag & drop"** en vez de conectarlo a un
-  repositorio Git: ese método no ejecuta `npm install` ni el build, así que
-  nunca se provisiona la base de datos ni se instalan las dependencias de las
-  funciones. Tienes que desplegarlo conectando un repositorio, como se explica
-  más abajo.
-- **Las funciones no encuentran el paquete `@netlify/neon`** porque el
-  `package.json` no llegó a subirse junto con el resto del proyecto, o el
-  build no llegó a completarse. Revisa el log del deploy en Netlify.
+1. Entra en tu proyecto en [app.netlify.com](https://app.netlify.com).
+2. Ve a **Data & Storage → Database**.
+3. Pulsa **Create a database manually**.
 
-Con el aviso de estado y el campo `detalle` que ahora devuelven las
-funciones en caso de error, deberías ver el mensaje exacto de Postgres/Neon
-en pantalla en vez de un fallo genérico.
+Con esto Netlify provisiona la base de datos y las variables de conexión al
+instante, sin esperar a un deploy. En el siguiente deploy (o si ya tienes uno
+hecho, en el próximo que lances), Netlify detecta la carpeta
+`netlify/database/migrations/` de este proyecto y aplica la migración que crea
+la tabla `mensajes` automáticamente.
 
-La tabla `mensajes` se crea automáticamente (`CREATE TABLE IF NOT EXISTS`) la
-primera vez que se llama a cualquiera de las dos funciones, así que no hace
-falta ejecutar SQL a mano.
+### Opción B — Automática, al desplegar
+
+Como `@netlify/database` ya está en `package.json`, si en vez de la opción A
+conectas el repositorio a Netlify y lanzas un deploy (ver más abajo), Netlify
+detecta esa dependencia, **provisiona la base de datos por su cuenta durante
+el build**, y aplica la migración inicial antes de publicar el sitio. No hace
+falta el paso manual de la opción A en ese caso.
+
+> ⚠️ Importante: este proyecto usaba antes `@netlify/neon`, que en la
+> documentación actual de Netlify aparece como **extensión "legacy"** (usa una
+> variable de entorno distinta, `NETLIFY_DATABASE_URL`, y no se autoprovisiona
+> igual que antes). Ya se ha migrado a `@netlify/database` (el paquete
+> soportado actualmente, con la variable `NETLIFY_DB_URL`), que es lo que hace
+> que la provisión — manual o automática — funcione de verdad.
 
 ## Desplegar sin usar la terminal (solo con la web)
-
-Este método usa únicamente el navegador: subes el código a GitHub desde su
-web, y conectas ese repositorio a Netlify desde su web. Al conectar un
-repositorio, Netlify **construye** el sitio en sus servidores, y ese paso de
-construcción es el que detecta `@netlify/neon` en `package.json` y
-autoprovisiona la base de datos — igual que haría `netlify dev` en local.
-
-> ⚠️ El "arrastrar y soltar" (Netlify Drop) **no sirve** para este proyecto:
-> ese método solo sube archivos estáticos sin ejecutar `npm install`, así que
-> nunca detectaría la dependencia ni crearía la base de datos.
 
 1. **Sube el proyecto a GitHub sin usar git en local**:
    - Entra en [github.com](https://github.com) y crea un repositorio nuevo
@@ -71,72 +62,46 @@ autoprovisiona la base de datos — igual que haría `netlify dev` en local.
    - Dentro del repo recién creado, usa **Add file → Upload files**.
    - Arrastra ahí *todo el contenido* de esta carpeta (`netlify.toml`,
      `package.json`, `README.md`, la carpeta `public/` y la carpeta
-     `netlify/`) y confirma el commit. GitHub permite subir carpetas
-     completas desde el navegador.
+     `netlify/` completa, incluyendo `netlify/database/`) y confirma el
+     commit.
+
+   > ⚠️ El "arrastrar y soltar" de Netlify Drop **no sirve** para este
+   > proyecto: no ejecuta `npm install` ni aplica migraciones, así que nunca
+   > se provisionaría la base de datos ni se instalarían las dependencias.
 
 2. **Conecta el repositorio a Netlify**:
    - Entra en [app.netlify.com](https://app.netlify.com) → **Add new project**
      → **Import an existing project**.
-   - Elige **GitHub**, autoriza el acceso y selecciona el repositorio que
-     acabas de crear.
+   - Elige **GitHub**, autoriza el acceso y selecciona el repositorio.
 
 3. **Configuración de build** (Netlify ya lee `netlify.toml`, pero por si te
-   pregunta):
-   - Build command: déjalo **vacío**.
-   - Publish directory: `public`.
-   - (Las funciones se detectan solas gracias a `functions = "netlify/functions"`
-     en `netlify.toml`.)
+   pregunta): Build command **vacío**, Publish directory `public`.
 
-4. **Deploy site**. Netlify instalará las dependencias (`@netlify/neon`
-   incluida) y, durante ese primer build, provisionará automáticamente la
-   base de datos y la variable `NETLIFY_DATABASE_URL`.
+4. **Deploy site**. Netlify instala las dependencias, provisiona la base de
+   datos (si no la creaste ya a mano con la Opción A) y aplica la migración
+   antes de publicar.
 
-5. **Comprobación opcional**: en el panel del sitio ve a
-   *Site configuration → Environment variables* y confirma que aparece
-   `NETLIFY_DATABASE_URL`. Si está ahí, la base de datos ya existe y el
-   mensajero funcionará en la URL que Netlify te asigne.
+5. **Comprobación**: abre la URL de tu sitio. Nada más cargar, la página
+   comprueba la conexión contra `/api/estado` y muestra un aviso verde
+   ("Conexión correcta") o uno rojo con el motivo exacto si algo falla. También
+   puedes revisar *Data & Storage → Database* para confirmar que la base de
+   datos existe y ver sus tablas.
 
-A partir de aquí, cualquier cambio que subas a ese repositorio de GitHub
-(también desde la web, con "Edit" o "Upload files") volverá a desplegar el
-sitio automáticamente.
+## Diagnóstico: "me da fallo en la consulta y el envío de mensajes"
 
-## Desplegar con la CLI (alternativa local)
+La página comprueba la conexión a la base de datos **nada más cargar** (llamada
+a `/api/estado`) y muestra un aviso arriba de todo con el motivo exacto si algo
+falla; ese mismo aviso se reactiva si falla un envío o una consulta mientras
+usas la app. Los motivos más comunes:
 
-1. **Instalar dependencias** dentro de la carpeta del proyecto:
-   ```bash
-   npm install
-   ```
-
-2. **Instalar la CLI de Netlify** si no la tienes:
-   ```bash
-   npm install -g netlify-cli
-   netlify login
-   ```
-
-3. **Vincular o crear el sitio**:
-   ```bash
-   netlify init
-   ```
-
-4. **Probar en local**:
-   ```bash
-   netlify dev
-   ```
-   Como `@netlify/neon` ya está en `package.json`, la CLI detecta la
-   dependencia y **provisiona la base de datos automáticamente** (crea la
-   Neon DB y la variable `NETLIFY_DATABASE_URL`) en este mismo paso — no hace
-   falta ejecutar `netlify db init` a mano.
-
-   Abre la URL local que indique la CLI. Abre dos pestañas o dos navegadores,
-   entra con dos nombres distintos y envía mensajes entre ellos.
-
-5. **Desplegar a producción**:
-   ```bash
-   netlify deploy --prod
-   ```
-   Si en vez de `netlify deploy` conectas el repositorio por Git, el primer
-   `push` que dispare un build en Netlify también provisionará la base de
-   datos solo, por la misma detección automática.
+- **La base de datos no está provisionada todavía.** Usa la Opción A de arriba
+  (*Data & Storage → Database → Create a database manually*) o vuelve a
+  desplegar el sitio.
+- **Se desplegó por "drag & drop"** en vez de conectando un repositorio: ese
+  método no instala dependencias ni aplica migraciones.
+- **La migración no llegó a aplicarse** (por ejemplo, si subiste el proyecto
+  sin la carpeta `netlify/database/migrations/`). Revisa el log del deploy en
+  Netlify: ahí se ve si la migración se aplicó o falló.
 
 ## Notas de diseño
 

@@ -1,20 +1,7 @@
-import { neon } from '@netlify/neon';
+import { getConnectionString } from '@netlify/database';
+import pg from 'pg';
 
-// sql() usa automáticamente la variable de entorno NETLIFY_DATABASE_URL
-// que Netlify inyecta cuando el sitio tiene una Netlify DB conectada.
-const sql = neon();
-
-async function asegurarTabla() {
-  await sql`
-    CREATE TABLE IF NOT EXISTS mensajes (
-      id SERIAL PRIMARY KEY,
-      remitente TEXT NOT NULL,
-      destinatario TEXT NOT NULL,
-      cuerpo TEXT NOT NULL,
-      creado_en TIMESTAMPTZ NOT NULL DEFAULT now()
-    )
-  `;
-}
+const pool = new pg.Pool({ connectionString: getConnectionString() });
 
 export default async (req) => {
   if (req.method !== 'POST') {
@@ -46,14 +33,12 @@ export default async (req) => {
   }
 
   try {
-    await asegurarTabla();
-    const [fila] = await sql`
-      INSERT INTO mensajes (remitente, destinatario, cuerpo)
-      VALUES (${remitente}, ${destinatario}, ${cuerpo})
-      RETURNING id, creado_en
-    `;
+    const { rows } = await pool.query(
+      'INSERT INTO mensajes (remitente, destinatario, cuerpo) VALUES ($1, $2, $3) RETURNING id, creado_en',
+      [remitente, destinatario, cuerpo]
+    );
 
-    return new Response(JSON.stringify({ ok: true, id: fila.id, creado_en: fila.creado_en }), {
+    return new Response(JSON.stringify({ ok: true, id: rows[0].id, creado_en: rows[0].creado_en }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
     });
