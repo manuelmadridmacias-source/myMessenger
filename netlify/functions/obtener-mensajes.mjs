@@ -3,6 +3,23 @@ import pg from 'pg';
 
 const pool = new pg.Pool({ connectionString: getConnectionString() });
 
+// Mismo self-healing que en enviar-mensaje.mjs: recrea la tabla si hace
+// falta, cacheado en memoria del proceso para no repetir la comprobación.
+let tablaAsegurada = false;
+async function asegurarTabla() {
+  if (tablaAsegurada) return;
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS mensajes (
+      id SERIAL PRIMARY KEY,
+      remitente TEXT NOT NULL,
+      destinatario TEXT NOT NULL,
+      cuerpo TEXT NOT NULL,
+      creado_en TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `);
+  tablaAsegurada = true;
+}
+
 export default async (req) => {
   if (req.method !== 'GET') {
     return new Response(JSON.stringify({ error: 'Método no permitido' }), {
@@ -22,6 +39,7 @@ export default async (req) => {
   }
 
   try {
+    await asegurarTabla();
     // Se devuelven los mensajes en los que el usuario participa, como
     // remitente o como destinatario (para poder reconstruir la conversación
     // completa con cada contacto, como en WhatsApp/Telegram). Nunca se

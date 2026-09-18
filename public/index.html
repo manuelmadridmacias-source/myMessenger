@@ -256,14 +256,15 @@
   }
   .burbuja {
     max-width: 68%;
-    padding: 7px 11px 8px;
-    border-radius: 12px;
+    padding: 5px 9px;
+    border-radius: 10px;
     font-size: 0.9rem;
-    line-height: 1.35;
+    line-height: 1.3;
     word-break: break-word;
     white-space: pre-wrap;
-    margin-bottom: 4px;
+    margin-bottom: 3px;
     position: relative;
+    width: fit-content;
   }
   .burbuja.mia {
     align-self: flex-end;
@@ -278,11 +279,11 @@
     border-bottom-left-radius: 3px;
   }
   .burbuja .hora-burbuja {
-    display: block;
-    font-size: 0.66rem;
+    float: right;
+    font-size: 0.65rem;
     opacity: 0.65;
-    margin-top: 3px;
-    text-align: right;
+    margin: 4px 0 -2px 8px;
+    white-space: nowrap;
   }
 
   .caja-envio {
@@ -385,7 +386,10 @@
 
 <script>
 (function () {
-  const INTERVALO_MENSAJES_MS = 5000;   // consulta de mensajes cada 5s
+  const INTERVALO_RAPIDO_MS = 5000;     // mientras el usuario ha escrito hace <30s
+  const INTERVALO_LENTO_MS = 10000;     // visible, pero ≥30s sin teclear
+  const INTERVALO_FONDO_MS = 20000;     // pestaña oculta (no se para del todo, para no perder mensajes)
+  const UMBRAL_INACTIVIDAD_MS = 30000;  // a partir de aquí se pasa a polling lento
   const INTERVALO_REINTENTO_DB_MS = 15000; // reintento de conexión cada 15s, solo si falló al inicio
   const CLAVE_USUARIO = 'mensajero_usuario';
   const COLORES_AVATAR = ['#5b8cff', '#3ecf8e', '#ff8a65', '#ba68c8', '#4dd0e1', '#f06292', '#ffca28', '#81c784'];
@@ -416,8 +420,15 @@
   let usuarioActual = null;
   let todosLosMensajes = [];
   let contactoActivo = null;
-  let temporizadorMensajes = null;
+  let idTemporizadorPolling = null;
+  let ultimoTecleo = 0;
   let temporizadorReintentoDb = null;
+
+  // Indicador de mensajes no leídos en el título de la pestaña
+  const TITULO_BASE = document.title; // "Mensajero"
+  let mensajesNoLeidos = 0;
+  let idsMensajesConocidos = new Set();
+  let primeraConsultaHecha = false;
 
   // ---------- Utilidades ----------
   function escaparHtml(texto) {
@@ -503,6 +514,52 @@
   }
 
   // ---------- Login / cambio de usuario ----------
+  // ---------- Polling adaptativo de mensajes ----------
+  // - Pestaña oculta: sigue consultando, pero cada 20s (no se corta del todo,
+  //   para no perder mensajes mientras está en segundo plano).
+  // - Pestaña visible y el usuario ha escrito en los últimos 30s: cada 5s.
+  // - Pestaña visible y lleva 30s o más sin teclear: cada 10s.
+  function detenerPolling() {
+    if (idTemporizadorPolling) {
+      clearTimeout(idTemporizadorPolling);
+      idTemporizadorPolling = null;
+    }
+  }
+
+  function intervaloSegunActividad() {
+    if (document.hidden) return INTERVALO_FONDO_MS;
+    const inactivoDesdeTecleo = Date.now() - ultimoTecleo;
+    return inactivoDesdeTecleo < UMBRAL_INACTIVIDAD_MS ? INTERVALO_RAPIDO_MS : INTERVALO_LENTO_MS;
+  }
+
+  async function cicloPolling() {
+    if (!usuarioActual) {
+      idTemporizadorPolling = null;
+      return;
+    }
+    await consultarMensajes();
+    idTemporizadorPolling = setTimeout(cicloPolling, intervaloSegunActividad());
+  }
+
+  function iniciarPolling() {
+    detenerPolling();
+    cicloPolling();
+  }
+
+  function actualizarTituloPestana() {
+    document.title = mensajesNoLeidos > 0 ? `✉️ (${mensajesNoLeidos}) ${TITULO_BASE}` : TITULO_BASE;
+  }
+
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && usuarioActual) {
+      mensajesNoLeidos = 0;
+      actualizarTituloPestana();
+      iniciarPolling(); // consulta inmediata al volver + reanuda con el ritmo que toque
+    }
+    // Al ocultarse no hace falta hacer nada: el ciclo en marcha recalculará
+    // el intervalo a 20s en su siguiente vuelta.
+  });
+
   function entrarComo(nombre) {
     usuarioActual = nombre;
     localStorage.setItem(CLAVE_USUARIO, nombre);
@@ -512,16 +569,21 @@
 
     todosLosMensajes = [];
     contactoActivo = null;
+    idsMensajesConocidos = new Set();
+    primeraConsultaHecha = false;
+    mensajesNoLeidos = 0;
+    actualizarTituloPestana();
     mostrarChatVacio();
     renderizarListaConversaciones();
 
-    consultarMensajes();
-    if (temporizadorMensajes) clearInterval(temporizadorMensajes);
-    temporizadorMensajes = setInterval(consultarMensajes, INTERVALO_MENSAJES_MS);
+    ultimoTecleo = Date.now(); // arranca en modo rápido, como si se acabara de interactuar
+    iniciarPolling();
   }
 
   function volverALogin() {
-    if (temporizadorMensajes) clearInterval(temporizadorMensajes);
+    detenerPolling();
+    mensajesNoLeidos = 0;
+    actualizarTituloPestana();
     vistaChat.style.display = 'none';
     vistaLogin.style.display = 'flex';
     inputNombre.value = usuarioActual || '';
@@ -641,7 +703,7 @@
     mensajesEl.scrollTop = mensajesEl.scrollHeight;
   }
 
-  // ---------- Consultar mensajes (polling cada 5s) ----------
+  // ---------- Consultar mensajes (polling adaptativo) ----------
   async function consultarMensajes() {
     if (!usuarioActual) return;
     try {
@@ -649,7 +711,28 @@
       const datos = await resp.json();
       if (!resp.ok) throw new Error(datos.detalle || datos.error || 'Error del servidor');
 
-      todosLosMensajes = Array.isArray(datos) ? datos : [];
+      const mensajesRecibidosDelServidor = Array.isArray(datos) ? datos : [];
+
+      // Si la pestaña está oculta, contamos como "no leídos" los mensajes
+      // recibidos (no los que hemos enviado nosotros) que no conocíamos ya.
+      // La primera consulta tras entrar no cuenta, para no marcar como
+      // "nuevo" todo el historial que ya existía.
+      if (primeraConsultaHecha && document.hidden) {
+        const nuevosRecibidos = mensajesRecibidosDelServidor.filter(m =>
+          m.destinatario === usuarioActual &&
+          m.remitente !== usuarioActual &&
+          !idsMensajesConocidos.has(m.id)
+        );
+        if (nuevosRecibidos.length > 0) {
+          mensajesNoLeidos += nuevosRecibidos.length;
+          actualizarTituloPestana();
+        }
+      }
+
+      idsMensajesConocidos = new Set(mensajesRecibidosDelServidor.map(m => m.id));
+      primeraConsultaHecha = true;
+
+      todosLosMensajes = mensajesRecibidosDelServidor;
       renderizarListaConversaciones();
       if (contactoActivo) renderizarHiloMensajes();
     } catch (err) {
@@ -676,6 +759,7 @@
 
       inputMensaje.value = '';
       inputMensaje.style.height = 'auto';
+      ultimoTecleo = Date.now(); // seguimos en modo rápido tras enviar
       // Reflejamos el mensaje al instante en la UI sin esperar al polling
       todosLosMensajes.push({
         id: datos.id,
@@ -720,6 +804,7 @@
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); enviarMensaje(); }
   });
   inputMensaje.addEventListener('input', () => {
+    ultimoTecleo = Date.now();
     inputMensaje.style.height = 'auto';
     inputMensaje.style.height = Math.min(inputMensaje.scrollHeight, 120) + 'px';
   });

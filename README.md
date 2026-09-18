@@ -5,8 +5,27 @@ cada usuario elige un nombre libremente (y puede cambiarlo en cualquier
 momento), envía mensajes a cualquier otro nombre, y ve el hilo completo de
 cada conversación (sus mensajes enviados y recibidos con esa persona), sin
 ver conversaciones ajenas. Todo se guarda en **Netlify Database** (Postgres).
-La lista de mensajes se refresca cada 5 segundos (polling) para no saturar la
-base de datos.
+La lista de mensajes se refresca con **polling adaptativo** para no saturar
+la base de datos ni gastar más créditos de Netlify de los necesarios:
+
+- Si la pestaña está **oculta** (cambias de pestaña o minimizas), el polling
+  sigue activo pero se ralentiza a **20 segundos**, para no perder mensajes
+  mientras no la estás mirando sin gastar créditos como si estuviera en
+  primer plano.
+- Si la pestaña está visible y **has escrito en los últimos 30 segundos**,
+  se consulta cada **5 segundos**.
+- Si la pestaña está visible pero **llevas 30s o más sin teclear**, se
+  consulta cada **10 segundos**.
+- Al volver a la pestaña, se hace una consulta inmediata y se reanuda el
+  ciclo con el ritmo que corresponda.
+
+## Aviso en la pestaña del navegador
+
+Si la pestaña está en segundo plano y llega un mensaje nuevo dirigido a ti,
+el título cambia a algo como **"✉️ (2) Mensajero"** (con el número de
+mensajes nuevos), sin necesidad de tener la ventana en primer plano. En
+cuanto vuelves a la pestaña, el contador se pone a cero y el título recupera
+su forma normal.
 
 ## Interfaz
 
@@ -125,8 +144,13 @@ usas la app. Los motivos más comunes:
 - **Se desplegó por "drag & drop"** en vez de conectando un repositorio: ese
   método no instala dependencias ni aplica migraciones.
 - **La migración no llegó a aplicarse** (por ejemplo, si subiste el proyecto
-  sin la carpeta `netlify/database/migrations/`). Revisa el log del deploy en
-  Netlify: ahí se ve si la migración se aplicó o falló.
+  sin la carpeta `netlify/database/migrations/`, o si borraste y recreaste la
+  base de datos manualmente desde el panel sin que hubiera un deploy nuevo de
+  por medio). Revisa el log del deploy en Netlify: ahí se ve si la migración
+  se aplicó o falló. Como red de seguridad adicional, las funciones
+  `enviar-mensaje` y `obtener-mensajes` crean la tabla `mensajes` ellas
+  mismas si no la encuentran, así que aunque recrees la base de datos sin
+  desplegar, la primera petición la deja lista sola.
 
 ## Notas de diseño
 
