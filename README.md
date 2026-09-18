@@ -1,10 +1,35 @@
 # Mensajero — Demo de Netlify Database
 
-Demo mínima de un mensajero web: cada usuario elige un nombre libremente, envía
-mensajes a cualquier otro nombre, y solo ve los mensajes dirigidos a él (con el
-nombre de quien los envió). Todo se guarda en **Netlify Database** (Postgres),
-y el frontend consulta los mensajes recibidos **cada 5 segundos** (polling) en
-lugar de hacerlo en tiempo real, para no saturar la base de datos.
+Demo de mensajero web con **vista de conversación estilo WhatsApp/Telegram**:
+cada usuario elige un nombre libremente (y puede cambiarlo en cualquier
+momento), envía mensajes a cualquier otro nombre, y ve el hilo completo de
+cada conversación (sus mensajes enviados y recibidos con esa persona), sin
+ver conversaciones ajenas. Todo se guarda en **Netlify Database** (Postgres).
+La lista de mensajes se refresca cada 5 segundos (polling) para no saturar la
+base de datos.
+
+## Interfaz
+
+- **Barra lateral**: lista de conversaciones (como los chats de WhatsApp),
+  con avatar, último mensaje y hora. Arriba, un campo para iniciar un chat
+  nuevo con cualquier nombre. El botón **Cambiar** junto a tu nombre te
+  devuelve a la pantalla de login para entrar con otro usuario sin recargar
+  la página.
+- **Panel de conversación**: burbujas de mensaje (las tuyas a la derecha, las
+  del otro a la izquierda), con separadores de fecha ("Hoy", "Ayer", fecha) y
+  hora en cada mensaje, igual que WhatsApp/Telegram.
+- En pantallas estrechas (móvil), la lista y la conversación se alternan con
+  un botón de "atrás", en vez de mostrarse las dos a la vez.
+
+## Comprobación de la base de datos
+
+La conexión se comprueba **una sola vez al arrancar** la página. Si va bien,
+se muestra un aviso verde que desaparece a los 3 segundos y **no se vuelve a
+comprobar nunca más** — se confía en que la conexión no se caerá. Si falla al
+arrancar, el aviso se queda fijo en rojo con el motivo exacto, y se reintenta
+automáticamente cada **15 segundos** hasta que la conexión funcione; en ese
+momento se avisa de que se ha restablecido y se deja de comprobar
+definitivamente.
 
 ## Estructura
 

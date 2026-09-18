@@ -22,9 +22,15 @@ export default async (req) => {
   }
 
   try {
-    // Solo se devuelven los mensajes dirigidos a este usuario, con el remitente.
+    // Se devuelven los mensajes en los que el usuario participa, como
+    // remitente o como destinatario (para poder reconstruir la conversación
+    // completa con cada contacto, como en WhatsApp/Telegram). Nunca se
+    // devuelven mensajes entre otros dos usuarios distintos.
     const { rows } = await pool.query(
-      'SELECT id, remitente, cuerpo, creado_en FROM mensajes WHERE destinatario = $1 ORDER BY creado_en ASC',
+      `SELECT id, remitente, destinatario, cuerpo, creado_en
+       FROM mensajes
+       WHERE remitente = $1 OR destinatario = $1
+       ORDER BY creado_en ASC`,
       [usuario]
     );
 

@@ -3,369 +3,736 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Mensajero · Demo Netlify DB</title>
+<title>Mensajero</title>
 <style>
   :root {
-    --bg: #0f1115;
-    --panel: #171a21;
-    --panel-2: #1f232c;
-    --border: #2a2f3a;
+    --bg: #0b0d12;
+    --panel: #161a22;
+    --panel-2: #1e232d;
+    --border: #262c38;
     --text: #e6e8eb;
-    --muted: #9aa1ac;
+    --muted: #8b93a1;
     --accent: #5b8cff;
     --accent-2: #3ecf8e;
+    --burbuja-mia: #2a5bd7;
+    --burbuja-otro: #1e232d;
   }
   * { box-sizing: border-box; }
-  body {
+  html, body {
     margin: 0;
+    height: 100%;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     background: var(--bg);
     color: var(--text);
+  }
+
+  /* ---------- Aviso de estado de la base de datos ---------- */
+  .db-banner {
+    padding: 8px 16px;
+    font-size: 0.82rem;
+    text-align: center;
+    border-bottom: 1px solid var(--border);
+    display: none;
+  }
+  .db-banner.ok { background: rgba(62, 207, 142, 0.12); color: var(--accent-2); }
+  .db-banner.error { background: rgba(255, 107, 107, 0.12); color: #ff8a8a; }
+  .db-banner.checking { background: var(--panel); color: var(--muted); }
+
+  /* ---------- Vista de login ---------- */
+  #vista-login {
     min-height: 100vh;
     display: flex;
     align-items: center;
     justify-content: center;
     padding: 24px;
   }
-  .app {
+  .login-card {
     width: 100%;
-    max-width: 720px;
-  }
-  h1 {
-    font-size: 1.4rem;
-    margin: 0 0 4px;
-  }
-  .subtitle {
-    color: var(--muted);
-    font-size: 0.9rem;
-    margin-bottom: 20px;
-  }
-  .card {
+    max-width: 380px;
     background: var(--panel);
     border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 20px;
-    margin-bottom: 16px;
+    border-radius: 14px;
+    padding: 28px;
   }
-  label {
-    display: block;
-    font-size: 0.8rem;
-    color: var(--muted);
-    margin-bottom: 6px;
-  }
-  input, textarea {
+  .login-card h1 { font-size: 1.3rem; margin: 0 0 4px; }
+  .login-card .subtitle { color: var(--muted); font-size: 0.85rem; margin-bottom: 20px; }
+  .login-card label { display: block; font-size: 0.8rem; color: var(--muted); margin-bottom: 6px; }
+  .login-card input {
     width: 100%;
     background: var(--panel-2);
     border: 1px solid var(--border);
     border-radius: 8px;
-    padding: 10px 12px;
+    padding: 11px 12px;
     color: var(--text);
     font-size: 0.95rem;
-    font-family: inherit;
+    margin-bottom: 16px;
   }
-  input:focus, textarea:focus {
-    outline: none;
-    border-color: var(--accent);
-  }
-  textarea { resize: vertical; min-height: 60px; }
-  .row { display: flex; gap: 12px; }
-  .row > div { flex: 1; }
-  .field { margin-bottom: 14px; }
-  button {
+  .login-card input:focus { outline: none; border-color: var(--accent); }
+  .login-card button {
+    width: 100%;
     background: var(--accent);
     color: white;
     border: none;
     border-radius: 8px;
-    padding: 10px 18px;
+    padding: 11px;
     font-size: 0.95rem;
     font-weight: 600;
     cursor: pointer;
   }
-  button:hover { opacity: 0.9; }
-  button:disabled { opacity: 0.5; cursor: not-allowed; }
-  button.secondary {
-    background: transparent;
-    border: 1px solid var(--border);
-    color: var(--text);
+  .login-card button:hover { opacity: 0.92; }
+
+  /* ---------- Vista de chat (estilo WhatsApp/Telegram) ---------- */
+  #vista-chat {
+    display: none;
+    height: 100vh;
+    height: 100dvh;
   }
-  .user-bar {
+  .app-shell {
     display: flex;
-    align-items: center;
-    gap: 10px;
-    justify-content: space-between;
+    height: 100%;
   }
-  .user-bar .who {
-    font-size: 0.95rem;
-  }
-  .user-bar .who b { color: var(--accent-2); }
-  .msg-list {
+
+  /* Barra lateral: lista de conversaciones */
+  .sidebar {
+    width: 340px;
+    min-width: 280px;
+    border-right: 1px solid var(--border);
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    max-height: 340px;
-    overflow-y: auto;
+    background: var(--panel);
   }
-  .msg {
+  .sidebar-header {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .sidebar-header .titulo { font-weight: 700; font-size: 1.05rem; }
+  .sidebar-header .yo {
+    font-size: 0.78rem;
+    color: var(--muted);
+  }
+  .sidebar-header .yo b { color: var(--accent-2); }
+  .btn-cambiar {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    border-radius: 6px;
+    padding: 4px 8px;
+    font-size: 0.72rem;
+    cursor: pointer;
+  }
+  .btn-cambiar:hover { color: var(--text); border-color: var(--accent); }
+
+  .nuevo-chat {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    gap: 6px;
+  }
+  .nuevo-chat input {
+    flex: 1;
     background: var(--panel-2);
     border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 10px 12px;
+    border-radius: 20px;
+    padding: 8px 14px;
+    color: var(--text);
+    font-size: 0.85rem;
   }
-  .msg .meta {
-    font-size: 0.75rem;
+  .nuevo-chat input:focus { outline: none; border-color: var(--accent); }
+  .nuevo-chat button {
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 20px;
+    padding: 8px 14px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .lista-conversaciones {
+    flex: 1;
+    overflow-y: auto;
+  }
+  .conversacion {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 11px 16px;
+    cursor: pointer;
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+  }
+  .conversacion:hover { background: var(--panel-2); }
+  .conversacion.activa { background: var(--panel-2); }
+  .avatar {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 1rem;
+    color: white;
+    flex-shrink: 0;
+  }
+  .conv-info { flex: 1; min-width: 0; }
+  .conv-info .fila-superior {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 6px;
+  }
+  .conv-info .nombre { font-weight: 600; font-size: 0.92rem; }
+  .conv-info .hora { font-size: 0.7rem; color: var(--muted); white-space: nowrap; }
+  .conv-info .preview {
+    font-size: 0.8rem;
     color: var(--muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .lista-vacia { padding: 30px 20px; color: var(--muted); font-size: 0.85rem; text-align: center; }
+
+  /* Panel principal de chat */
+  .panel-chat {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    background:
+      radial-gradient(circle at 20% 20%, rgba(91,140,255,0.04), transparent 40%),
+      var(--bg);
+  }
+  .chat-vacio {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--muted);
+    font-size: 0.95rem;
+    text-align: center;
+    padding: 20px;
+  }
+  .chat-header {
+    padding: 12px 18px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: var(--panel);
+  }
+  .chat-header .btn-atras {
+    display: none;
+    background: transparent;
+    border: none;
+    color: var(--text);
+    font-size: 1.1rem;
+    cursor: pointer;
+    padding: 0 4px 0 0;
+  }
+  .chat-header .nombre-contacto { font-weight: 600; font-size: 0.98rem; }
+
+  .mensajes {
+    flex: 1;
+    overflow-y: auto;
+    padding: 18px 6% 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .separador-fecha {
+    align-self: center;
+    background: var(--panel-2);
+    color: var(--muted);
+    font-size: 0.72rem;
+    padding: 3px 12px;
+    border-radius: 12px;
+    margin: 12px 0 8px;
+  }
+  .burbuja {
+    max-width: 68%;
+    padding: 7px 11px 8px;
+    border-radius: 12px;
+    font-size: 0.9rem;
+    line-height: 1.35;
+    word-break: break-word;
+    white-space: pre-wrap;
     margin-bottom: 4px;
+    position: relative;
   }
-  .msg .meta b { color: var(--accent); }
-  .msg .body { font-size: 0.92rem; white-space: pre-wrap; word-break: break-word; }
-  .empty { color: var(--muted); font-size: 0.9rem; text-align: center; padding: 20px 0; }
-  .status { font-size: 0.75rem; color: var(--muted); margin-top: 8px; text-align: right; }
-  .send-status { font-size: 0.8rem; margin-top: 8px; min-height: 1em; }
-  .send-status.ok { color: var(--accent-2); }
-  .send-status.error { color: #ff6b6b; }
-  .panel-title { font-size: 1rem; margin: 0 0 14px; }
-  .db-banner {
-    border-radius: 10px;
+  .burbuja.mia {
+    align-self: flex-end;
+    background: var(--burbuja-mia);
+    color: white;
+    border-bottom-right-radius: 3px;
+  }
+  .burbuja.otro {
+    align-self: flex-start;
+    background: var(--burbuja-otro);
+    color: var(--text);
+    border-bottom-left-radius: 3px;
+  }
+  .burbuja .hora-burbuja {
+    display: block;
+    font-size: 0.66rem;
+    opacity: 0.65;
+    margin-top: 3px;
+    text-align: right;
+  }
+
+  .caja-envio {
     padding: 12px 16px;
-    margin-bottom: 16px;
-    font-size: 0.88rem;
+    border-top: 1px solid var(--border);
+    background: var(--panel);
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+  }
+  .caja-envio textarea {
+    flex: 1;
+    resize: none;
+    max-height: 120px;
+    background: var(--panel-2);
     border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 10px 16px;
+    color: var(--text);
+    font-size: 0.92rem;
+    font-family: inherit;
   }
-  .db-banner.ok {
-    background: rgba(62, 207, 142, 0.12);
-    border-color: rgba(62, 207, 142, 0.4);
-    color: var(--accent-2);
+  .caja-envio textarea:focus { outline: none; border-color: var(--accent); }
+  .caja-envio button {
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 42px;
+    height: 42px;
+    font-size: 1.1rem;
+    cursor: pointer;
+    flex-shrink: 0;
   }
-  .db-banner.error {
-    background: rgba(255, 107, 107, 0.1);
-    border-color: rgba(255, 107, 107, 0.4);
-    color: #ff8a8a;
-  }
-  .db-banner.checking {
-    color: var(--muted);
+  .caja-envio button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* Responsive: en pantallas pequeñas, sidebar y chat se alternan */
+  @media (max-width: 760px) {
+    .sidebar { width: 100%; min-width: 0; }
+    .app-shell.chat-abierto .sidebar { display: none; }
+    .app-shell:not(.chat-abierto) .panel-chat { display: none; }
+    .chat-header .btn-atras { display: inline-block; }
+    .mensajes { padding-left: 3%; padding-right: 3%; }
   }
 </style>
 </head>
 <body>
-<div class="app">
-  <h1>💬 Mensajero</h1>
-  <p class="subtitle">Demo de uso de la base de datos de Netlify (Netlify DB / Postgres)</p>
 
-  <div id="aviso-db" class="db-banner" style="display:none"></div>
+<div id="aviso-db" class="db-banner"></div>
 
-  <!-- Paso 1: elegir nombre de usuario -->
-  <div class="card" id="tarjeta-login">
-    <p class="panel-title">¿Cómo te llamas?</p>
-    <div class="field">
-      <label for="input-nombre">Tu nombre de usuario</label>
-      <input id="input-nombre" type="text" maxlength="40" placeholder="p. ej. manuel" autocomplete="off">
-    </div>
+<!-- Vista de login / cambio de usuario -->
+<div id="vista-login">
+  <div class="login-card">
+    <h1>💬 Mensajero</h1>
+    <p class="subtitle">Demo de uso de Netlify Database</p>
+    <label for="input-nombre">¿Cómo te llamas?</label>
+    <input id="input-nombre" type="text" maxlength="40" placeholder="p. ej. manuel" autocomplete="off">
     <button id="btn-entrar">Entrar</button>
   </div>
+</div>
 
-  <!-- Paso 2: mensajero (oculto hasta elegir nombre) -->
-  <div id="zona-app" style="display:none">
-    <div class="card user-bar">
-      <div class="who">Conectado como <b id="etiqueta-usuario"></b></div>
-      <button class="secondary" id="btn-salir">Cambiar de usuario</button>
-    </div>
+<!-- Vista de chat -->
+<div id="vista-chat">
+  <div class="app-shell" id="app-shell">
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <div>
+          <div class="titulo">Mensajero</div>
+          <div class="yo">Conectado como <b id="etiqueta-usuario"></b></div>
+        </div>
+        <button class="btn-cambiar" id="btn-cambiar-usuario">Cambiar</button>
+      </div>
+      <div class="nuevo-chat">
+        <input id="input-nuevo-chat" type="text" maxlength="40" placeholder="Nuevo chat con..." autocomplete="off">
+        <button id="btn-nuevo-chat">Iniciar</button>
+      </div>
+      <div class="lista-conversaciones" id="lista-conversaciones">
+        <div class="lista-vacia">Aún no tienes conversaciones.<br>Escribe un nombre arriba para empezar.</div>
+      </div>
+    </aside>
 
-    <div class="card">
-      <p class="panel-title">Enviar mensaje</p>
-      <div class="field">
-        <label for="input-destinatario">Para (nombre de usuario)</label>
-        <input id="input-destinatario" type="text" maxlength="40" placeholder="p. ej. laura" autocomplete="off">
-      </div>
-      <div class="field">
-        <label for="input-mensaje">Mensaje</label>
-        <textarea id="input-mensaje" maxlength="1000" placeholder="Escribe tu mensaje..."></textarea>
-      </div>
-      <button id="btn-enviar">Enviar</button>
-      <div class="send-status" id="estado-envio"></div>
-    </div>
+    <section class="panel-chat" id="panel-chat">
+      <div class="chat-vacio" id="chat-vacio">Selecciona una conversación o inicia una nueva.</div>
 
-    <div class="card">
-      <p class="panel-title">Mensajes recibidos</p>
-      <div class="msg-list" id="lista-mensajes">
-        <div class="empty">Aún no hay mensajes.</div>
+      <div id="chat-activo" style="display:none; flex:1; flex-direction:column; min-height:0;">
+        <div class="chat-header">
+          <button class="btn-atras" id="btn-atras">←</button>
+          <div class="avatar" id="avatar-contacto"></div>
+          <div class="nombre-contacto" id="nombre-contacto"></div>
+        </div>
+        <div class="mensajes" id="mensajes"></div>
+        <div class="caja-envio">
+          <textarea id="input-mensaje" maxlength="1000" placeholder="Escribe un mensaje..." rows="1"></textarea>
+          <button id="btn-enviar" title="Enviar">➤</button>
+        </div>
       </div>
-      <div class="status" id="estado-consulta">Consultando cada 5 segundos…</div>
-    </div>
+    </section>
   </div>
 </div>
 
 <script>
 (function () {
-  const INTERVALO_MS = 5000; // consulta cada 5 segundos, como se pidió
+  const INTERVALO_MENSAJES_MS = 5000;   // consulta de mensajes cada 5s
+  const INTERVALO_REINTENTO_DB_MS = 15000; // reintento de conexión cada 15s, solo si falló al inicio
   const CLAVE_USUARIO = 'mensajero_usuario';
+  const COLORES_AVATAR = ['#5b8cff', '#3ecf8e', '#ff8a65', '#ba68c8', '#4dd0e1', '#f06292', '#ffca28', '#81c784'];
 
-  const tarjetaLogin = document.getElementById('tarjeta-login');
-  const zonaApp = document.getElementById('zona-app');
+  // --- Referencias DOM ---
+  const avisoDb = document.getElementById('aviso-db');
+  const vistaLogin = document.getElementById('vista-login');
+  const vistaChat = document.getElementById('vista-chat');
   const inputNombre = document.getElementById('input-nombre');
   const btnEntrar = document.getElementById('btn-entrar');
   const etiquetaUsuario = document.getElementById('etiqueta-usuario');
-  const btnSalir = document.getElementById('btn-salir');
+  const btnCambiarUsuario = document.getElementById('btn-cambiar-usuario');
 
-  const inputDestinatario = document.getElementById('input-destinatario');
+  const inputNuevoChat = document.getElementById('input-nuevo-chat');
+  const btnNuevoChat = document.getElementById('btn-nuevo-chat');
+  const listaConversaciones = document.getElementById('lista-conversaciones');
+
+  const appShell = document.getElementById('app-shell');
+  const chatVacio = document.getElementById('chat-vacio');
+  const chatActivo = document.getElementById('chat-activo');
+  const avatarContacto = document.getElementById('avatar-contacto');
+  const nombreContacto = document.getElementById('nombre-contacto');
+  const btnAtras = document.getElementById('btn-atras');
+  const mensajesEl = document.getElementById('mensajes');
   const inputMensaje = document.getElementById('input-mensaje');
   const btnEnviar = document.getElementById('btn-enviar');
-  const estadoEnvio = document.getElementById('estado-envio');
-
-  const listaMensajes = document.getElementById('lista-mensajes');
-  const estadoConsulta = document.getElementById('estado-consulta');
-  const avisoDb = document.getElementById('aviso-db');
 
   let usuarioActual = null;
-  let temporizador = null;
+  let todosLosMensajes = [];
+  let contactoActivo = null;
+  let temporizadorMensajes = null;
+  let temporizadorReintentoDb = null;
 
-  async function comprobarBaseDeDatos() {
-    avisoDb.style.display = 'block';
-    avisoDb.className = 'db-banner checking';
-    avisoDb.textContent = 'Comprobando conexión con la base de datos…';
-    try {
-      const resp = await fetch('/api/estado');
-      const datos = await resp.json();
-      if (resp.ok && datos.ok) {
-        avisoDb.className = 'db-banner ok';
-        avisoDb.textContent = '✓ Conexión con la base de datos correcta.';
-        // Ocultar el aviso a los 3 segundos si todo va bien
-        setTimeout(() => { avisoDb.style.display = 'none'; }, 3000);
-      } else {
-        avisoDb.className = 'db-banner error';
-        avisoDb.textContent = '✗ Fallo de conexión con la base de datos: ' + (datos.error || 'error desconocido');
-      }
-    } catch (err) {
-      avisoDb.className = 'db-banner error';
-      avisoDb.textContent = '✗ No se pudo contactar con la función de estado (/api/estado). ' + err.message;
-    }
-  }
-  let ultimoIdVisto = 0;
-
-  function entrarComo(nombre) {
-    usuarioActual = nombre;
-    localStorage.setItem(CLAVE_USUARIO, nombre);
-    etiquetaUsuario.textContent = nombre;
-    tarjetaLogin.style.display = 'none';
-    zonaApp.style.display = 'block';
-    ultimoIdVisto = 0;
-    listaMensajes.innerHTML = '<div class="empty">Aún no hay mensajes.</div>';
-    consultarMensajes();
-    if (temporizador) clearInterval(temporizador);
-    temporizador = setInterval(consultarMensajes, INTERVALO_MS);
-  }
-
-  function salir() {
-    usuarioActual = null;
-    localStorage.removeItem(CLAVE_USUARIO);
-    if (temporizador) clearInterval(temporizador);
-    zonaApp.style.display = 'none';
-    tarjetaLogin.style.display = 'block';
-    inputNombre.value = '';
-    inputNombre.focus();
-  }
-
+  // ---------- Utilidades ----------
   function escaparHtml(texto) {
     const div = document.createElement('div');
     div.textContent = texto;
     return div.innerHTML;
   }
 
-  function formatearFecha(iso) {
-    try {
-      const d = new Date(iso);
-      return d.toLocaleString();
-    } catch {
-      return iso;
-    }
+  function colorParaNombre(nombre) {
+    let hash = 0;
+    for (let i = 0; i < nombre.length; i++) hash = nombre.charCodeAt(i) + ((hash << 5) - hash);
+    return COLORES_AVATAR[Math.abs(hash) % COLORES_AVATAR.length];
   }
 
-  async function consultarMensajes() {
-    if (!usuarioActual) return;
-    estadoConsulta.textContent = 'Consultando…';
-    try {
-      const resp = await fetch('/api/mensajes?usuario=' + encodeURIComponent(usuarioActual));
-      const mensajes = await resp.json();
-      if (!resp.ok) throw new Error(mensajes.detalle || mensajes.error || 'Error del servidor');
+  function inicial(nombre) {
+    return (nombre[0] || '?').toUpperCase();
+  }
 
-      if (!Array.isArray(mensajes) || mensajes.length === 0) {
-        listaMensajes.innerHTML = '<div class="empty">Aún no hay mensajes.</div>';
-      } else {
-        listaMensajes.innerHTML = mensajes.map(m => `
-          <div class="msg">
-            <div class="meta"><b>${escaparHtml(m.remitente)}</b> · ${formatearFecha(m.creado_en)}</div>
-            <div class="body">${escaparHtml(m.cuerpo)}</div>
-          </div>
-        `).join('');
-        listaMensajes.scrollTop = listaMensajes.scrollHeight;
-      }
-      const ahora = new Date().toLocaleTimeString();
-      estadoConsulta.textContent = `Última consulta: ${ahora} · próxima en 5s`;
+  function formatearHoraCorta(iso) {
+    const d = new Date(iso);
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+
+  function formatearFechaSeparador(iso) {
+    const d = new Date(iso);
+    const hoy = new Date();
+    const ayer = new Date(hoy); ayer.setDate(hoy.getDate() - 1);
+    const mismodia = (a, b) => a.toDateString() === b.toDateString();
+    if (mismodia(d, hoy)) return 'Hoy';
+    if (mismodia(d, ayer)) return 'Ayer';
+    return d.toLocaleDateString([], { day: '2-digit', month: 'short', year: 'numeric' });
+  }
+
+  // ---------- Aviso de estado de la base de datos ----------
+  // Se comprueba UNA vez al arrancar. Si va bien, no se vuelve a comprobar
+  // nunca más (se confía en que la conexión no se caiga). Si falla, se
+  // avisa de forma persistente y se reintenta cada 15s hasta que funcione;
+  // en cuanto funciona, se deja de comprobar definitivamente.
+  async function consultarEstadoDbUnaVez() {
+    try {
+      const resp = await fetch('/api/estado');
+      const datos = await resp.json();
+      return !!(resp.ok && datos.ok) ? { ok: true } : { ok: false, error: datos.error || 'error desconocido' };
     } catch (err) {
-      estadoConsulta.textContent = 'Error al consultar mensajes. Reintentando en 5s…';
-      console.error(err);
-      comprobarBaseDeDatos();
+      return { ok: false, error: err.message };
     }
   }
 
-  async function enviarMensaje() {
-    const para = inputDestinatario.value.trim();
-    const mensaje = inputMensaje.value.trim();
+  async function comprobarBaseDeDatosAlInicio() {
+    avisoDb.style.display = 'block';
+    avisoDb.className = 'db-banner checking';
+    avisoDb.textContent = 'Comprobando conexión con la base de datos…';
 
-    if (!para || !mensaje) {
-      estadoEnvio.textContent = 'Rellena el destinatario y el mensaje.';
-      estadoEnvio.className = 'send-status error';
+    const resultado = await consultarEstadoDbUnaVez();
+
+    if (resultado.ok) {
+      avisoDb.className = 'db-banner ok';
+      avisoDb.textContent = '✓ Conexión con la base de datos correcta.';
+      setTimeout(() => { avisoDb.style.display = 'none'; }, 3000);
+      // No se programa ningún reintento: confiamos en que no se caerá.
       return;
     }
 
-    btnEnviar.disabled = true;
-    estadoEnvio.textContent = 'Enviando…';
-    estadoEnvio.className = 'send-status';
+    // Falló: aviso persistente + reintentos cada 15s
+    avisoDb.className = 'db-banner error';
+    avisoDb.textContent = '✗ Fallo de conexión con la base de datos: ' + resultado.error;
 
+    if (temporizadorReintentoDb) clearInterval(temporizadorReintentoDb);
+    temporizadorReintentoDb = setInterval(async () => {
+      const reintento = await consultarEstadoDbUnaVez();
+      if (reintento.ok) {
+        clearInterval(temporizadorReintentoDb);
+        temporizadorReintentoDb = null;
+        avisoDb.className = 'db-banner ok';
+        avisoDb.textContent = '✓ Conexión con la base de datos restablecida.';
+        setTimeout(() => { avisoDb.style.display = 'none'; }, 3000);
+        // A partir de aquí, ya no se vuelve a comprobar.
+      } else {
+        avisoDb.className = 'db-banner error';
+        avisoDb.textContent = '✗ Fallo de conexión con la base de datos: ' + reintento.error;
+      }
+    }, INTERVALO_REINTENTO_DB_MS);
+  }
+
+  // ---------- Login / cambio de usuario ----------
+  function entrarComo(nombre) {
+    usuarioActual = nombre;
+    localStorage.setItem(CLAVE_USUARIO, nombre);
+    etiquetaUsuario.textContent = nombre;
+    vistaLogin.style.display = 'none';
+    vistaChat.style.display = 'block';
+
+    todosLosMensajes = [];
+    contactoActivo = null;
+    mostrarChatVacio();
+    renderizarListaConversaciones();
+
+    consultarMensajes();
+    if (temporizadorMensajes) clearInterval(temporizadorMensajes);
+    temporizadorMensajes = setInterval(consultarMensajes, INTERVALO_MENSAJES_MS);
+  }
+
+  function volverALogin() {
+    if (temporizadorMensajes) clearInterval(temporizadorMensajes);
+    vistaChat.style.display = 'none';
+    vistaLogin.style.display = 'flex';
+    inputNombre.value = usuarioActual || '';
+    inputNombre.focus();
+    inputNombre.select();
+  }
+
+  // ---------- Conversaciones ----------
+  function otraParte(mensaje) {
+    return mensaje.remitente === usuarioActual ? mensaje.destinatario : mensaje.remitente;
+  }
+
+  function construirConversaciones() {
+    const mapa = new Map();
+    for (const m of todosLosMensajes) {
+      const contacto = otraParte(m);
+      const existente = mapa.get(contacto);
+      if (!existente || new Date(m.creado_en) > new Date(existente.creado_en)) {
+        mapa.set(contacto, m);
+      }
+    }
+    return Array.from(mapa.entries())
+      .map(([contacto, ultimoMensaje]) => ({ contacto, ultimoMensaje }))
+      .sort((a, b) => new Date(b.ultimoMensaje.creado_en) - new Date(a.ultimoMensaje.creado_en));
+  }
+
+  function renderizarListaConversaciones() {
+    const conversaciones = construirConversaciones();
+
+    // Si hay un contacto activo que aún no tiene mensajes (chat recién
+    // iniciado desde "Nuevo chat"), lo mantenemos visible arriba del todo.
+    const contactosExistentes = new Set(conversaciones.map(c => c.contacto));
+    if (contactoActivo && !contactosExistentes.has(contactoActivo)) {
+      conversaciones.unshift({ contacto: contactoActivo, ultimoMensaje: null });
+    }
+
+    if (conversaciones.length === 0) {
+      listaConversaciones.innerHTML = '<div class="lista-vacia">Aún no tienes conversaciones.<br>Escribe un nombre arriba para empezar.</div>';
+      return;
+    }
+
+    listaConversaciones.innerHTML = conversaciones.map(({ contacto, ultimoMensaje }) => {
+      const activa = contacto === contactoActivo ? ' activa' : '';
+      const preview = ultimoMensaje
+        ? (ultimoMensaje.remitente === usuarioActual ? 'Tú: ' : '') + escaparHtml(ultimoMensaje.cuerpo)
+        : 'Nueva conversación';
+      const hora = ultimoMensaje ? formatearHoraCorta(ultimoMensaje.creado_en) : '';
+      return `
+        <div class="conversacion${activa}" data-contacto="${escaparHtml(contacto)}">
+          <div class="avatar" style="background:${colorParaNombre(contacto)}">${escaparHtml(inicial(contacto))}</div>
+          <div class="conv-info">
+            <div class="fila-superior">
+              <span class="nombre">${escaparHtml(contacto)}</span>
+              <span class="hora">${hora}</span>
+            </div>
+            <div class="preview">${preview}</div>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    listaConversaciones.querySelectorAll('.conversacion').forEach(el => {
+      el.addEventListener('click', () => abrirConversacion(el.dataset.contacto));
+    });
+  }
+
+  function mostrarChatVacio() {
+    contactoActivo = null;
+    chatVacio.style.display = 'flex';
+    chatActivo.style.display = 'none';
+    appShell.classList.remove('chat-abierto');
+  }
+
+  function abrirConversacion(contacto) {
+    contactoActivo = contacto;
+    chatVacio.style.display = 'none';
+    chatActivo.style.display = 'flex';
+    appShell.classList.add('chat-abierto');
+
+    avatarContacto.textContent = inicial(contacto);
+    avatarContacto.style.background = colorParaNombre(contacto);
+    nombreContacto.textContent = contacto;
+
+    renderizarListaConversaciones();
+    renderizarHiloMensajes();
+    inputMensaje.focus();
+  }
+
+  function renderizarHiloMensajes() {
+    if (!contactoActivo) return;
+    const hilo = todosLosMensajes
+      .filter(m => otraParte(m) === contactoActivo)
+      .sort((a, b) => new Date(a.creado_en) - new Date(b.creado_en));
+
+    if (hilo.length === 0) {
+      mensajesEl.innerHTML = '';
+      return;
+    }
+
+    let html = '';
+    let fechaAnterior = null;
+    for (const m of hilo) {
+      const fechaSeparador = formatearFechaSeparador(m.creado_en);
+      if (fechaSeparador !== fechaAnterior) {
+        html += `<div class="separador-fecha">${fechaSeparador}</div>`;
+        fechaAnterior = fechaSeparador;
+      }
+      const mia = m.remitente === usuarioActual;
+      html += `
+        <div class="burbuja ${mia ? 'mia' : 'otro'}">
+          ${escaparHtml(m.cuerpo)}
+          <span class="hora-burbuja">${formatearHoraCorta(m.creado_en)}</span>
+        </div>
+      `;
+    }
+    mensajesEl.innerHTML = html;
+    mensajesEl.scrollTop = mensajesEl.scrollHeight;
+  }
+
+  // ---------- Consultar mensajes (polling cada 5s) ----------
+  async function consultarMensajes() {
+    if (!usuarioActual) return;
+    try {
+      const resp = await fetch('/api/mensajes?usuario=' + encodeURIComponent(usuarioActual));
+      const datos = await resp.json();
+      if (!resp.ok) throw new Error(datos.detalle || datos.error || 'Error del servidor');
+
+      todosLosMensajes = Array.isArray(datos) ? datos : [];
+      renderizarListaConversaciones();
+      if (contactoActivo) renderizarHiloMensajes();
+    } catch (err) {
+      console.error('Error al consultar mensajes:', err);
+      // No se reactiva la comprobación de estado de la base de datos aquí:
+      // solo se comprueba al inicio, según lo pedido.
+    }
+  }
+
+  // ---------- Enviar mensaje ----------
+  async function enviarMensaje() {
+    const mensaje = inputMensaje.value.trim();
+    if (!mensaje || !contactoActivo) return;
+
+    btnEnviar.disabled = true;
     try {
       const resp = await fetch('/api/enviar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ de: usuarioActual, para, mensaje }),
+        body: JSON.stringify({ de: usuarioActual, para: contactoActivo, mensaje }),
       });
       const datos = await resp.json();
       if (!resp.ok) throw new Error(datos.detalle || datos.error || 'Error al enviar');
 
-      estadoEnvio.textContent = '✓ Mensaje enviado.';
-      estadoEnvio.className = 'send-status ok';
       inputMensaje.value = '';
+      inputMensaje.style.height = 'auto';
+      // Reflejamos el mensaje al instante en la UI sin esperar al polling
+      todosLosMensajes.push({
+        id: datos.id,
+        remitente: usuarioActual,
+        destinatario: contactoActivo,
+        cuerpo: mensaje,
+        creado_en: datos.creado_en || new Date().toISOString(),
+      });
+      renderizarListaConversaciones();
+      renderizarHiloMensajes();
     } catch (err) {
-      estadoEnvio.textContent = '✗ ' + err.message;
-      estadoEnvio.className = 'send-status error';
-      comprobarBaseDeDatos();
+      console.error('Error al enviar mensaje:', err);
+      alert('No se pudo enviar el mensaje: ' + err.message);
     } finally {
       btnEnviar.disabled = false;
     }
   }
 
+  // ---------- Eventos ----------
   btnEntrar.addEventListener('click', () => {
     const nombre = inputNombre.value.trim();
-    if (!nombre) {
-      inputNombre.focus();
-      return;
-    }
+    if (!nombre) { inputNombre.focus(); return; }
     entrarComo(nombre);
   });
+  inputNombre.addEventListener('keydown', (e) => { if (e.key === 'Enter') btnEntrar.click(); });
 
-  inputNombre.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') btnEntrar.click();
+  btnCambiarUsuario.addEventListener('click', volverALogin);
+
+  btnNuevoChat.addEventListener('click', () => {
+    const contacto = inputNuevoChat.value.trim().slice(0, 40);
+    if (!contacto) { inputNuevoChat.focus(); return; }
+    if (contacto === usuarioActual) { alert('No puedes iniciar un chat contigo mismo.'); return; }
+    inputNuevoChat.value = '';
+    abrirConversacion(contacto);
+  });
+  inputNuevoChat.addEventListener('keydown', (e) => { if (e.key === 'Enter') btnNuevoChat.click(); });
+
+  btnAtras.addEventListener('click', mostrarChatVacio);
+
+  btnEnviar.addEventListener('click', enviarMensaje);
+  inputMensaje.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); enviarMensaje(); }
+  });
+  inputMensaje.addEventListener('input', () => {
+    inputMensaje.style.height = 'auto';
+    inputMensaje.style.height = Math.min(inputMensaje.scrollHeight, 120) + 'px';
   });
 
-  btnSalir.addEventListener('click', salir);
-  btnEnviar.addEventListener('click', enviarMensaje);
+  // ---------- Arranque ----------
+  comprobarBaseDeDatosAlInicio();
 
-  // Comprobar el estado de la base de datos nada más cargar la página
-  comprobarBaseDeDatos();
-
-  // Recordar el último usuario usado
   const guardado = localStorage.getItem(CLAVE_USUARIO);
   if (guardado) {
     inputNombre.value = guardado;
     entrarComo(guardado);
+  } else {
+    inputNombre.focus();
   }
 })();
 </script>
