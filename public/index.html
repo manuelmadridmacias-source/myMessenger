@@ -27,16 +27,11 @@
   }
 
   /* ---------- Aviso de estado de la base de datos ---------- */
-  .db-banner {
-    padding: 8px 16px;
-    font-size: 0.82rem;
-    text-align: center;
-    border-bottom: 1px solid var(--border);
-    display: none;
+  .indicador-estado {
+    font-size: 0.7rem;
+    margin-left: 4px;
+    vertical-align: middle;
   }
-  .db-banner.ok { background: rgba(62, 207, 142, 0.12); color: var(--accent-2); }
-  .db-banner.error { background: rgba(255, 107, 107, 0.12); color: #ff8a8a; }
-  .db-banner.checking { background: var(--panel); color: var(--muted); }
 
   /* ---------- Vista de login ---------- */
   #vista-login {
@@ -332,8 +327,6 @@
 </head>
 <body>
 
-<div id="aviso-db" class="db-banner"></div>
-
 <!-- Vista de login / cambio de usuario -->
 <div id="vista-login">
   <div class="login-card">
@@ -351,7 +344,7 @@
     <aside class="sidebar">
       <div class="sidebar-header">
         <div>
-          <div class="titulo">Mensajero</div>
+          <div class="titulo">Mensajero <span id="indicador-estado" class="indicador-estado"></span></div>
           <div class="yo">Conectado como <b id="etiqueta-usuario"></b></div>
         </div>
         <button class="btn-cambiar" id="btn-cambiar-usuario">Cambiar</button>
@@ -386,16 +379,15 @@
 
 <script>
 (function () {
-  const INTERVALO_RAPIDO_MS = 5000;     // mientras el usuario ha escrito hace <30s
-  const INTERVALO_LENTO_MS = 10000;     // visible, pero ≥30s sin teclear
-  const INTERVALO_FONDO_MS = 20000;     // pestaña oculta (no se para del todo, para no perder mensajes)
-  const UMBRAL_INACTIVIDAD_MS = 30000;  // a partir de aquí se pasa a polling lento
+  const INTERVALO_RAPIDO_MS = 5000;     // mientras el usuario ha escrito hace <20s
+  const INTERVALO_LENTO_MS = 20000;     // visible, pero ≥20s sin teclear ("reposo")
+  const UMBRAL_INACTIVIDAD_MS = 20000;  // a partir de aquí se pasa a polling lento
   const INTERVALO_REINTENTO_DB_MS = 15000; // reintento de conexión cada 15s, solo si falló al inicio
   const CLAVE_USUARIO = 'mensajero_usuario';
   const COLORES_AVATAR = ['#5b8cff', '#3ecf8e', '#ff8a65', '#ba68c8', '#4dd0e1', '#f06292', '#ffca28', '#81c784'];
 
   // --- Referencias DOM ---
-  const avisoDb = document.getElementById('aviso-db');
+  const indicadorEstado = document.getElementById('indicador-estado');
   const vistaLogin = document.getElementById('vista-login');
   const vistaChat = document.getElementById('vista-chat');
   const inputNombre = document.getElementById('input-nombre');
@@ -424,11 +416,9 @@
   let ultimoTecleo = 0;
   let temporizadorReintentoDb = null;
 
-  // Indicador de mensajes no leídos en el título de la pestaña
-  const TITULO_BASE = document.title; // "Mensajero"
-  let mensajesNoLeidos = 0;
-  let idsMensajesConocidos = new Set();
-  let primeraConsultaHecha = false;
+  // Estado de conexión para el indicador junto a "Mensajero":
+  // null = comprobando todavía, true = conectado, false = fallo de conexión.
+  let conexionOk = null;
 
   // ---------- Utilidades ----------
   function escaparHtml(texto) {
@@ -467,6 +457,17 @@
   // nunca más (se confía en que la conexión no se caiga). Si falla, se
   // avisa de forma persistente y se reintenta cada 15s hasta que funcione;
   // en cuanto funciona, se deja de comprobar definitivamente.
+  function calcularEmojiEstado() {
+    if (conexionOk === false) return '🔴';
+    if (conexionOk !== true) return ''; // aún comprobando, sin indicador
+    const enReposo = (Date.now() - ultimoTecleo) >= UMBRAL_INACTIVIDAD_MS;
+    return enReposo ? '🔵' : '🟢';
+  }
+
+  function actualizarIndicador() {
+    indicadorEstado.textContent = calcularEmojiEstado();
+  }
+
   async function consultarEstadoDbUnaVez() {
     try {
       const resp = await fetch('/api/estado');
@@ -478,23 +479,22 @@
   }
 
   async function comprobarBaseDeDatosAlInicio() {
-    avisoDb.style.display = 'block';
-    avisoDb.className = 'db-banner checking';
-    avisoDb.textContent = 'Comprobando conexión con la base de datos…';
+    conexionOk = null;
+    actualizarIndicador();
 
     const resultado = await consultarEstadoDbUnaVez();
 
     if (resultado.ok) {
-      avisoDb.className = 'db-banner ok';
-      avisoDb.textContent = '✓ Conexión con la base de datos correcta.';
-      setTimeout(() => { avisoDb.style.display = 'none'; }, 3000);
+      conexionOk = true;
+      actualizarIndicador();
       // No se programa ningún reintento: confiamos en que no se caerá.
       return;
     }
 
-    // Falló: aviso persistente + reintentos cada 15s
-    avisoDb.className = 'db-banner error';
-    avisoDb.textContent = '✗ Fallo de conexión con la base de datos: ' + resultado.error;
+    // Falló: 🔴 persistente + reintentos cada 15s hasta que conecte
+    conexionOk = false;
+    actualizarIndicador();
+    console.error('Fallo de conexión con la base de datos:', resultado.error);
 
     if (temporizadorReintentoDb) clearInterval(temporizadorReintentoDb);
     temporizadorReintentoDb = setInterval(async () => {
@@ -502,23 +502,20 @@
       if (reintento.ok) {
         clearInterval(temporizadorReintentoDb);
         temporizadorReintentoDb = null;
-        avisoDb.className = 'db-banner ok';
-        avisoDb.textContent = '✓ Conexión con la base de datos restablecida.';
-        setTimeout(() => { avisoDb.style.display = 'none'; }, 3000);
+        conexionOk = true;
+        actualizarIndicador();
         // A partir de aquí, ya no se vuelve a comprobar.
       } else {
-        avisoDb.className = 'db-banner error';
-        avisoDb.textContent = '✗ Fallo de conexión con la base de datos: ' + reintento.error;
+        console.error('Sigue fallando la conexión con la base de datos:', reintento.error);
       }
     }, INTERVALO_REINTENTO_DB_MS);
   }
 
-  // ---------- Login / cambio de usuario ----------
-  // ---------- Polling adaptativo de mensajes ----------
-  // - Pestaña oculta: sigue consultando, pero cada 20s (no se corta del todo,
-  //   para no perder mensajes mientras está en segundo plano).
-  // - Pestaña visible y el usuario ha escrito en los últimos 30s: cada 5s.
-  // - Pestaña visible y lleva 30s o más sin teclear: cada 10s.
+  // ---------- Polling adaptativo de mensajes (solo en primer plano) ----------
+  // - Pestaña oculta: NO se hace ninguna petición (para no gastar créditos
+  //   de la base de datos mientras no se está mirando).
+  // - Pestaña visible y el usuario ha escrito en los últimos 20s: cada 5s.
+  // - Pestaña visible y lleva 20s o más sin teclear ("reposo"): cada 20s.
   function detenerPolling() {
     if (idTemporizadorPolling) {
       clearTimeout(idTemporizadorPolling);
@@ -527,17 +524,19 @@
   }
 
   function intervaloSegunActividad() {
-    if (document.hidden) return INTERVALO_FONDO_MS;
     const inactivoDesdeTecleo = Date.now() - ultimoTecleo;
     return inactivoDesdeTecleo < UMBRAL_INACTIVIDAD_MS ? INTERVALO_RAPIDO_MS : INTERVALO_LENTO_MS;
   }
 
   async function cicloPolling() {
-    if (!usuarioActual) {
+    if (!usuarioActual || document.hidden) {
+      // Con la pestaña oculta no se programa nada más: se reanudará solo
+      // al volver a ser visible (ver el listener de visibilitychange).
       idTemporizadorPolling = null;
       return;
     }
     await consultarMensajes();
+    actualizarIndicador();
     idTemporizadorPolling = setTimeout(cicloPolling, intervaloSegunActividad());
   }
 
@@ -546,18 +545,14 @@
     cicloPolling();
   }
 
-  function actualizarTituloPestana() {
-    document.title = mensajesNoLeidos > 0 ? `✉️ (${mensajesNoLeidos}) ${TITULO_BASE}` : TITULO_BASE;
-  }
-
   document.addEventListener('visibilitychange', () => {
-    if (!document.hidden && usuarioActual) {
-      mensajesNoLeidos = 0;
-      actualizarTituloPestana();
-      iniciarPolling(); // consulta inmediata al volver + reanuda con el ritmo que toque
+    if (document.hidden) {
+      detenerPolling(); // cero peticiones mientras esté oculta
+    } else if (usuarioActual) {
+      ultimoTecleo = Date.now(); // al volver, se trata como actividad reciente
+      iniciarPolling(); // consulta inmediata + reanuda a ritmo rápido
+      actualizarIndicador();
     }
-    // Al ocultarse no hace falta hacer nada: el ciclo en marcha recalculará
-    // el intervalo a 20s en su siguiente vuelta.
   });
 
   function entrarComo(nombre) {
@@ -569,10 +564,6 @@
 
     todosLosMensajes = [];
     contactoActivo = null;
-    idsMensajesConocidos = new Set();
-    primeraConsultaHecha = false;
-    mensajesNoLeidos = 0;
-    actualizarTituloPestana();
     mostrarChatVacio();
     renderizarListaConversaciones();
 
@@ -582,8 +573,6 @@
 
   function volverALogin() {
     detenerPolling();
-    mensajesNoLeidos = 0;
-    actualizarTituloPestana();
     vistaChat.style.display = 'none';
     vistaLogin.style.display = 'flex';
     inputNombre.value = usuarioActual || '';
@@ -703,7 +692,7 @@
     mensajesEl.scrollTop = mensajesEl.scrollHeight;
   }
 
-  // ---------- Consultar mensajes (polling adaptativo) ----------
+  // ---------- Consultar mensajes (polling adaptativo, solo en primer plano) ----------
   async function consultarMensajes() {
     if (!usuarioActual) return;
     try {
@@ -711,28 +700,7 @@
       const datos = await resp.json();
       if (!resp.ok) throw new Error(datos.detalle || datos.error || 'Error del servidor');
 
-      const mensajesRecibidosDelServidor = Array.isArray(datos) ? datos : [];
-
-      // Si la pestaña está oculta, contamos como "no leídos" los mensajes
-      // recibidos (no los que hemos enviado nosotros) que no conocíamos ya.
-      // La primera consulta tras entrar no cuenta, para no marcar como
-      // "nuevo" todo el historial que ya existía.
-      if (primeraConsultaHecha && document.hidden) {
-        const nuevosRecibidos = mensajesRecibidosDelServidor.filter(m =>
-          m.destinatario === usuarioActual &&
-          m.remitente !== usuarioActual &&
-          !idsMensajesConocidos.has(m.id)
-        );
-        if (nuevosRecibidos.length > 0) {
-          mensajesNoLeidos += nuevosRecibidos.length;
-          actualizarTituloPestana();
-        }
-      }
-
-      idsMensajesConocidos = new Set(mensajesRecibidosDelServidor.map(m => m.id));
-      primeraConsultaHecha = true;
-
-      todosLosMensajes = mensajesRecibidosDelServidor;
+      todosLosMensajes = Array.isArray(datos) ? datos : [];
       renderizarListaConversaciones();
       if (contactoActivo) renderizarHiloMensajes();
     } catch (err) {
@@ -760,6 +728,7 @@
       inputMensaje.value = '';
       inputMensaje.style.height = 'auto';
       ultimoTecleo = Date.now(); // seguimos en modo rápido tras enviar
+      actualizarIndicador();
       // Reflejamos el mensaje al instante en la UI sin esperar al polling
       todosLosMensajes.push({
         id: datos.id,
@@ -805,6 +774,7 @@
   });
   inputMensaje.addEventListener('input', () => {
     ultimoTecleo = Date.now();
+    actualizarIndicador();
     inputMensaje.style.height = 'auto';
     inputMensaje.style.height = Math.min(inputMensaje.scrollHeight, 120) + 'px';
   });

@@ -5,27 +5,41 @@ cada usuario elige un nombre libremente (y puede cambiarlo en cualquier
 momento), envía mensajes a cualquier otro nombre, y ve el hilo completo de
 cada conversación (sus mensajes enviados y recibidos con esa persona), sin
 ver conversaciones ajenas. Todo se guarda en **Netlify Database** (Postgres).
-La lista de mensajes se refresca con **polling adaptativo** para no saturar
-la base de datos ni gastar más créditos de Netlify de los necesarios:
+Todo se guarda en **Netlify Database** (Postgres). Para no gastar créditos de
+Netlify de más, el polling de mensajes **solo ocurre con la pestaña en
+primer plano**:
 
-- Si la pestaña está **oculta** (cambias de pestaña o minimizas), el polling
-  sigue activo pero se ralentiza a **20 segundos**, para no perder mensajes
-  mientras no la estás mirando sin gastar créditos como si estuviera en
-  primer plano.
-- Si la pestaña está visible y **has escrito en los últimos 30 segundos**,
+- Si la pestaña está **oculta** (cambias de pestaña o la minimizas), no se
+  hace ninguna petición a la base de datos. Cero coste mientras no la estás
+  mirando.
+- Si la pestaña está visible y **has escrito en los últimos 20 segundos**,
   se consulta cada **5 segundos**.
-- Si la pestaña está visible pero **llevas 30s o más sin teclear**, se
-  consulta cada **10 segundos**.
-- Al volver a la pestaña, se hace una consulta inmediata y se reanuda el
-  ciclo con el ritmo que corresponda.
+- Si la pestaña está visible pero **llevas 20s o más sin teclear** ("modo
+  reposo"), se consulta cada **20 segundos**.
+- Al volver a la pestaña, se hace una consulta inmediata y se reanuda a
+  ritmo rápido.
 
-## Aviso en la pestaña del navegador
+> Nota: al no consultar nunca en segundo plano, no hay ningún aviso de
+> mensajes nuevos en el título de la pestaña — se decidió así a propósito,
+> para no tener que consultar la base de datos mientras no se ve la app.
 
-Si la pestaña está en segundo plano y llega un mensaje nuevo dirigido a ti,
-el título cambia a algo como **"✉️ (2) Mensajero"** (con el número de
-mensajes nuevos), sin necesidad de tener la ventana en primer plano. En
-cuanto vuelves a la pestaña, el contador se pone a cero y el título recupera
-su forma normal.
+## Indicador de conexión
+
+Junto al texto **"Mensajero"** de la barra lateral hay un pequeño indicador
+que resume el estado en todo momento:
+
+| Icono | Significado |
+|---|---|
+| 🟢 | Conectado a la base de datos y en ritmo activo (polling a 5s) |
+| 🔵 | Conectado, pero en "modo reposo" (llevas 20s+ sin teclear, polling a 20s) |
+| 🔴 | Fallo de conexión con la base de datos |
+
+La conexión se comprueba una sola vez al arrancar la página. Si va bien, no
+se vuelve a comprobar nunca más — se confía en que no se caerá, y el
+indicador simplemente refleja el ritmo de polling (🟢/🔵). Si falla al
+arrancar, se queda en 🔴 y se reintenta automáticamente cada **15 segundos**
+hasta que conecte; en ese momento pasa a 🟢/🔵 y se deja de comprobar para
+siempre.
 
 ## Interfaz
 
@@ -39,16 +53,6 @@ su forma normal.
   hora en cada mensaje, igual que WhatsApp/Telegram.
 - En pantallas estrechas (móvil), la lista y la conversación se alternan con
   un botón de "atrás", en vez de mostrarse las dos a la vez.
-
-## Comprobación de la base de datos
-
-La conexión se comprueba **una sola vez al arrancar** la página. Si va bien,
-se muestra un aviso verde que desaparece a los 3 segundos y **no se vuelve a
-comprobar nunca más** — se confía en que la conexión no se caerá. Si falla al
-arrancar, el aviso se queda fijo en rojo con el motivo exacto, y se reintenta
-automáticamente cada **15 segundos** hasta que la conexión funcione; en ese
-momento se avisa de que se ha restablecido y se deja de comprobar
-definitivamente.
 
 ## Estructura
 
@@ -133,10 +137,11 @@ falta el paso manual de la opción A en ese caso.
 
 ## Diagnóstico: "me da fallo en la consulta y el envío de mensajes"
 
-La página comprueba la conexión a la base de datos **nada más cargar** (llamada
-a `/api/estado`) y muestra un aviso arriba de todo con el motivo exacto si algo
-falla; ese mismo aviso se reactiva si falla un envío o una consulta mientras
-usas la app. Los motivos más comunes:
+La página comprueba la conexión a la base de datos **nada más cargar**
+(llamada a `/api/estado`) y lo refleja en el indicador 🟢/🔵/🔴 junto a
+"Mensajero" (ver arriba). Si ves 🔴, revisa el motivo en la consola del
+navegador (F12 → Console), donde se registra el error exacto. Los motivos
+más comunes:
 
 - **La base de datos no está provisionada todavía.** Usa la Opción A de arriba
   (*Data & Storage → Database → Create a database manually*) o vuelve a
