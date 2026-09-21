@@ -3,26 +3,6 @@ import pg from 'pg';
 
 const pool = new pg.Pool({ connectionString: getConnectionString() });
 
-// "Self-healing": si la base de datos se recreó vacía (por ejemplo, borrada
-// y vuelta a crear desde el panel sin pasar por un deploy que aplique las
-// migraciones), esto crea la tabla al vuelo la primera vez que haga falta.
-// Se cachea en memoria del propio proceso para no repetir la comprobación
-// en cada petición mientras la función siga "caliente".
-let tablaAsegurada = false;
-async function asegurarTabla() {
-  if (tablaAsegurada) return;
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS mensajes (
-      id SERIAL PRIMARY KEY,
-      remitente TEXT NOT NULL,
-      destinatario TEXT NOT NULL,
-      cuerpo TEXT NOT NULL,
-      creado_en TIMESTAMPTZ NOT NULL DEFAULT now()
-    )
-  `);
-  tablaAsegurada = true;
-}
-
 export default async (req) => {
   if (req.method !== 'POST') {
     return new Response(JSON.stringify({ error: 'Método no permitido' }), {
@@ -53,7 +33,6 @@ export default async (req) => {
   }
 
   try {
-    await asegurarTabla();
     const { rows } = await pool.query(
       'INSERT INTO mensajes (remitente, destinatario, cuerpo) VALUES ($1, $2, $3) RETURNING id, creado_en',
       [remitente, destinatario, cuerpo]
